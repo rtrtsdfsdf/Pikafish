@@ -1204,7 +1204,7 @@ config-sanity: net
 	(test "$(lasx)" = "yes" || test "$(lasx)" = "no") && \
 	(test "$(comp)" = "gcc" || test "$(comp)" = "icx" || test "$(comp)" = "mingw" || \
 	 test "$(comp)" = "clang" || test "$(comp)" = "armv7a-linux-androideabi16-clang" || \
-	 test "$(comp)" = "aarch64-linux-android21-clang")
+	 test "$(comp)" = "aarch64-linux-android21-clang" || test "$(comp)" = "emscripten")
 
 $(EXE): $(OBJS)
 	+$(CXX) -o $@ $(OBJS) $(LDFLAGS)

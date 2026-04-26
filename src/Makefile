@@ -135,7 +135,7 @@ ifeq ($(ARCH), $(filter $(ARCH), \
                  x86-64-universal x86-64-avx512icl x86-64-vnni512 x86-64-avx512 x86-64-avxvnni \
                  x86-64-bmi2 x86-64-avx2 x86-64-sse41-popcnt x86-64-modern x86-64-ssse3 x86-64-sse3-popcnt \
                  x86-64 x86-32-sse41-popcnt x86-32-sse2 x86-32 ppc-64 ppc-64-altivec ppc-64-vsx ppc-32 e2k \
-                 armv7 armv7-neon armv8 armv8-dotprod apple-silicon general-64 general-32 riscv64 \
+                 armv7 armv7-neon armv8 armv8-dotprod apple-silicon wasm general-64 general-32 riscv64 \
                  loongarch64 loongarch64-lsx loongarch64-lasx))
    SUPPORTED_ARCH=true
 else
@@ -366,6 +366,13 @@ ifeq ($(ARCH),wasm)
 	COMP = emscripten
 	EXE = pikafish.js
 endif
+
+ifeq ($(ARCH),wasm)
+	arch = any
+	popcnt = yes
+	COMP = emscripten
+	EXE = pikafish.js
+endif
 ifeq ($(ARCH),apple-silicon)
 	arch = arm64
 	prefetch = yes
@@ -536,6 +543,19 @@ ifeq ($(COMP),clang)
 		ifeq ($(ARCH),riscv64)
 			CXXFLAGS += -latomic
 		endif
+
+ifeq ($(COMP),emscripten)
+	comp=emscripten
+	CXX=em++
+	EMFLAGS += -s MODULARIZE=1 -s EXPORT_NAME="Pikafish" -s ENVIRONMENT=web,worker,node
+	EMFLAGS += -s USE_PTHREADS=1 -s PTHREAD_POOL_SIZE=1
+	EMFLAGS += -s EXIT_RUNTIME=0 -s "EXTRA_EXPORTED_RUNTIME_METHODS=[\"ccall\"]"
+	EMFLAGS += -s ALLOW_MEMORY_GROWTH=1 -s INITIAL_MEMORY=134217728
+	EMFLAGS += -s FILESYSTEM=0
+	EMFLAGS += -s STRICT=1 -s ASSERTIONS=0
+	CXXFLAGS += $(EMFLAGS)
+	LDFLAGS += $(EMFLAGS)
+endif
 	else ifeq ($(arch),loongarch64)
 		CXXFLAGS += -latomic
 	else
@@ -730,7 +750,9 @@ else
 endif
 
 ifeq ($(popcnt),yes)
-	ifeq ($(arch),$(filter $(arch),ppc64 ppc64-altivec ppc64-vsx armv7 armv8 arm64))
+	ifeq ($(comp),emscripten)
+		CXXFLAGS += -DUSE_POPCNT
+	else ifeq ($(arch),$(filter $(arch),ppc64 ppc64-altivec ppc64-vsx armv7 armv8 arm64))
 		CXXFLAGS += -DUSE_POPCNT
 	else
 		CXXFLAGS += -msse3 -mpopcnt -DUSE_POPCNT
@@ -898,6 +920,8 @@ ifeq ($(debug),no)
 
 	ifeq ($(comp),$(filter $(comp),clang icx))
 		CXXFLAGS += -flto=full
+	else ifeq ($(comp),emscripten)
+		# Emscripten handles linking differently, skip LTO
 		ifeq ($(comp),icx)
 			CXXFLAGS += -fwhole-program-vtables
 		endif

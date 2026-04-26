@@ -359,6 +359,13 @@ ifeq ($(ARCH),armv8-dotprod)
 	arm_version = 8
 endif
 
+
+ifeq ($(ARCH),wasm)
+	arch = any
+	popcnt = yes
+	COMP = emscripten
+	EXE = pikafish.js
+endif
 ifeq ($(ARCH),apple-silicon)
 	arch = arm64
 	prefetch = yes
@@ -535,6 +542,19 @@ ifeq ($(COMP),clang)
 		CXXFLAGS += -m$(bits)
 		LDFLAGS += -m$(bits)
 	endif
+endif
+
+ifeq ($(COMP),emscripten)
+	comp=emscripten
+	CXX=em++
+	EMFLAGS += -s MODULARIZE=1 -s EXPORT_NAME="Pikafish" -s ENVIRONMENT=web,worker,node
+	EMFLAGS += -s USE_PTHREADS=1 -s PTHREAD_POOL_SIZE=1
+	EMFLAGS += -s EXIT_RUNTIME=0 -s "EXTRA_EXPORTED_RUNTIME_METHODS=[\"ccall\"]"
+	EMFLAGS += -s ALLOW_MEMORY_GROWTH=1 -s INITIAL_MEMORY=134217728
+	EMFLAGS += -s FILESYSTEM=0
+	EMFLAGS += -s STRICT=1 -s ASSERTIONS=0
+	CXXFLAGS += $(EMFLAGS)
+	LDFLAGS += $(EMFLAGS)
 endif
 
 ifeq ($(KERNEL),Darwin)
@@ -900,6 +920,8 @@ ifeq ($(debug),no)
 		CXXFLAGS += -flto -flto-partition=one
 		LDFLAGS += $(CXXFLAGS) -save-temps
 	endif
+	else ifeq ($(comp),emscripten)
+		# Emscripten handles linking differently, skip LTO
 endif
 endif
 

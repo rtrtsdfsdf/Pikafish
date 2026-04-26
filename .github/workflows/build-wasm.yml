@@ -2,11 +2,6 @@ name: Build Pikafish WASM
 
 on:
   workflow_dispatch:  # 手动触发
-  push:
-    branches: [master]
-    paths:
-      - 'src/**'
-      - '.github/workflows/build-wasm.yml'
 
 jobs:
   build:
@@ -20,24 +15,33 @@ jobs:
         with:
           version: 3.1.51
 
-      - name: Verify Emscripten
-        run: emcc -v
-
       - name: Build Pikafish WASM
         run: |
           cd src
-          emmake make ARCH=wasm build=yes \
-            COMP=emscripten \
-            CXX=em++ \
-            CFLAGS="-O3 -s WASM=1" \
-            LDFLAGS="-s ALLOW_MEMORY_GROWTH=1 -s MODULARIZE=1 -s EXPORT_NAME='Pikafish' -s EXIT_RUNTIME=1"
+          # 使用 emscripten 编译，指定 general-64 架构
+          em++ -O3 -s WASM=1 \
+            -s ALLOW_MEMORY_GROWTH=1 \
+            -s MODULARIZE=1 \
+            -s EXPORT_NAME='Pikafish' \
+            -s EXIT_RUNTIME=1 \
+            -s EXPORTED_FUNCTIONS='["_main","_uci"]' \
+            -s EXTRA_EXPORTED_RUNTIME_METHODS='["ccall","cwrap"]' \
+            -std=c++17 \
+            -DNDEBUG \
+            -DIS_64BIT \
+            -DBITS=64 \
+            -DUSE_POPCNT \
+            -DUSE_NEON \
+            $(find . -name '*.cpp' | grep -v 'syzygy') \
+            -o ../dist/pikafish.js \
+            -I. \
+            -lpthread \
+            --emrun
 
-      - name: Prepare artifacts
+      - name: List output
         run: |
-          mkdir -p dist
-          cp src/pikafish.js dist/
-          cp src/pikafish.wasm dist/ 2>/dev/null || echo "WASM file may have different name"
-          ls -la src/*.js src/*.wasm 2>/dev/null || ls -la src/
+          ls -la dist/ || echo "No dist folder"
+          find . -name "*.js" -o -name "*.wasm" 2>/dev/null | head -20
 
       - name: Upload WASM artifact
         uses: actions/upload-artifact@v4
@@ -47,7 +51,6 @@ jobs:
           retention-days: 30
 
       - name: Create Release
-        if: github.event_name == 'workflow_dispatch'
         uses: softprops/action-gh-release@v1
         with:
           tag_name: wasm-${{ github.run_number }}

@@ -18,33 +18,19 @@ jobs:
       - name: Build Pikafish WASM
         run: |
           cd src
-          # 使用 emscripten 编译，禁用 NEON 和 POPCNT（WASM 不支持）
-          em++ -O3 -s WASM=1 \
-            -s ALLOW_MEMORY_GROWTH=1 \
-            -s MODULARIZE=1 \
-            -s EXPORT_NAME='Pikafish' \
-            -s EXIT_RUNTIME=1 \
-            -s EXPORTED_FUNCTIONS='["_main"]' \
-            -s EXTRA_EXPORTED_RUNTIME_METHODS='["ccall","cwrap","callMain"]' \
-            -std=c++17 \
-            -DNDEBUG \
-            -DIS_64BIT \
-            -DBITS=64 \
-            -DNO_PREFETCH \
-            $(find . -name '*.cpp' | grep -v 'syzygy') \
-            -o ../dist/pikafish.js \
-            -I. \
-            -lpthread
+          make -j ARCH=wasm build
 
       - name: List output
         run: |
-          ls -la dist/ || echo "No dist folder"
+          ls -la src/*.js src/*.wasm 2>/dev/null || ls -la src/
 
       - name: Upload WASM artifact
         uses: actions/upload-artifact@v4
         with:
           name: pikafish-wasm
-          path: dist/
+          path: |
+            src/pikafish.js
+            src/pikafish.wasm
           retention-days: 30
 
       - name: Create Release
@@ -52,6 +38,8 @@ jobs:
         with:
           tag_name: wasm-${{ github.run_number }}
           name: Pikafish WASM Build ${{ github.run_number }}
-          files: dist/*
+          files: |
+            src/pikafish.js
+            src/pikafish.wasm
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

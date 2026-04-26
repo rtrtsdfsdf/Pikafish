@@ -18,30 +18,27 @@ jobs:
       - name: Build Pikafish WASM
         run: |
           cd src
-          # 使用 emscripten 编译，指定 general-64 架构
+          # 使用 emscripten 编译，禁用 NEON 和 POPCNT（WASM 不支持）
           em++ -O3 -s WASM=1 \
             -s ALLOW_MEMORY_GROWTH=1 \
             -s MODULARIZE=1 \
             -s EXPORT_NAME='Pikafish' \
             -s EXIT_RUNTIME=1 \
-            -s EXPORTED_FUNCTIONS='["_main","_uci"]' \
-            -s EXTRA_EXPORTED_RUNTIME_METHODS='["ccall","cwrap"]' \
+            -s EXPORTED_FUNCTIONS='["_main"]' \
+            -s EXTRA_EXPORTED_RUNTIME_METHODS='["ccall","cwrap","callMain"]' \
             -std=c++17 \
             -DNDEBUG \
             -DIS_64BIT \
             -DBITS=64 \
-            -DUSE_POPCNT \
-            -DUSE_NEON \
+            -DNO_PREFETCH \
             $(find . -name '*.cpp' | grep -v 'syzygy') \
             -o ../dist/pikafish.js \
             -I. \
-            -lpthread \
-            --emrun
+            -lpthread
 
       - name: List output
         run: |
           ls -la dist/ || echo "No dist folder"
-          find . -name "*.js" -o -name "*.wasm" 2>/dev/null | head -20
 
       - name: Upload WASM artifact
         uses: actions/upload-artifact@v4

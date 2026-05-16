@@ -26,6 +26,18 @@
 #include "tune.h"
 #include "uci.h"
 
+#ifdef __EMSCRIPTEN__
+#  include <emscripten.h>
+#  include "emscripten_stdin.h"
+
+static EmscriptenStdinBuf g_stdin_buf;
+
+// ★ JS 侧通过 Module._push_stdin(ptr, len) 调用此函数
+extern "C" EMSCRIPTEN_KEEPALIVE void push_stdin(const char* data, size_t len) {
+    g_stdin_buf.push_data(data, len);
+}
+#endif
+
 using namespace Stockfish;
 
 #ifdef UNIVERSAL_BINARY
@@ -34,7 +46,14 @@ int main(int argc, char* argv[]);
 #endif
 
 int main(int argc, char* argv[]) {
+    std::cout << "pikafish main begin...." << std::endl;
     std::cout << engine_info() << std::endl;
+
+#ifdef __EMSCRIPTEN__
+    // ★ 替换 std::cin 的底层缓冲区 — 之后 uci.cpp 的 getline(std::cin, cmd)
+    //    会自动走 emscripten_futex_wait 阻塞路径
+    std::cin.rdbuf(&g_stdin_buf);
+#endif
 
     Bitboards::init();
     Position::init();

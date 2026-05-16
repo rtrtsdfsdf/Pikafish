@@ -28,6 +28,7 @@
 #include <string_view>
 #include <utility>
 #include <vector>
+#include <string>
 
 #include "benchmark.h"
 #include "engine.h"
@@ -85,6 +86,9 @@ void UCIEngine::init_search_update_listeners() {
 }
 
 void UCIEngine::loop() {
+
+    sync_cout << "comming into UCIEngine::loop...." << sync_endl;
+
     std::string token, cmd;
 
     for (int i = 1; i < cli.argc; ++i)
@@ -95,6 +99,10 @@ void UCIEngine::loop() {
         if (cli.argc == 1
             && !getline(std::cin, cmd))  // Wait for an input or an end-of-file (EOF) indication
             cmd = "quit";
+
+        
+        sync_cout << "output cmd: " << cmd.c_str() << sync_endl;
+        
 
         std::istringstream is(cmd);
 
@@ -174,6 +182,9 @@ void UCIEngine::loop() {
                       << sync_endl;
 
     } while (token != "quit" && cli.argc == 1);  // The command-line arguments are one-shot
+
+    sync_cout << "exiting UCIEngine::loop do" << sync_endl;
+
 }
 
 Search::LimitsType UCIEngine::parse_limits(std::istream& is) {

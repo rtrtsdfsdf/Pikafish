@@ -126,6 +126,8 @@ struct RootMove {
 
     explicit RootMove(Move m) { pv.push_back(m); }
     bool extract_ponder_from_tt(const TranspositionTable& tt, Position& pos);
+    bool score_is_bound() const { return scoreLowerbound || scoreUpperbound; }
+    void unset_bound_flags() { scoreLowerbound = scoreUpperbound = false; }
     bool operator==(const Move& m) const { return pv[0] == m; }
     // Sort in descending order
     bool operator<(const RootMove& m) const {
@@ -171,22 +173,22 @@ struct LimitsType {
 // The UCI stores the uci options, thread pool, and transposition table.
 // This struct is used to easily forward data to the Search::Worker class.
 struct SharedState {
-    SharedState(const OptionsMap&                                         optionsMap,
-                ThreadPool&                                               threadPool,
-                TranspositionTable&                                       transpositionTable,
-                std::map<NumaIndex, SharedHistories>&                     sharedHists,
-                const LazyNumaReplicatedSystemWide<Eval::NNUE::Networks>& nets) :
+    SharedState(const OptionsMap&                                        optionsMap,
+                ThreadPool&                                              threadPool,
+                TranspositionTable&                                      transpositionTable,
+                std::map<NumaIndex, SharedHistories>&                    sharedHists,
+                const LazyNumaReplicatedSystemWide<Eval::NNUE::Network>& net) :
         options(optionsMap),
         threads(threadPool),
         tt(transpositionTable),
         sharedHistories(sharedHists),
-        networks(nets) {}
+        network(net) {}
 
-    const OptionsMap&                                         options;
-    ThreadPool&                                               threads;
-    TranspositionTable&                                       tt;
-    std::map<NumaIndex, SharedHistories>&                     sharedHistories;
-    const LazyNumaReplicatedSystemWide<Eval::NNUE::Networks>& networks;
+    const OptionsMap&                                        options;
+    ThreadPool&                                              threads;
+    TranspositionTable&                                      tt;
+    std::map<NumaIndex, SharedHistories>&                    sharedHistories;
+    const LazyNumaReplicatedSystemWide<Eval::NNUE::Network>& network;
 };
 
 class Worker;
@@ -348,7 +350,7 @@ class Worker {
     Position  rootPos;
     StateInfo rootState;
     RootMoves rootMoves;
-    Depth     rootDepth, completedDepth;
+    Depth     rootDepth;
     Value     rootDelta;
 
     PVMoves lastIterationPV;
@@ -362,10 +364,10 @@ class Worker {
     // The main thread has a SearchManager, the others have a NullSearchManager
     std::unique_ptr<ISearchManager> manager;
 
-    const OptionsMap&                                         options;
-    ThreadPool&                                               threads;
-    TranspositionTable&                                       tt;
-    const LazyNumaReplicatedSystemWide<Eval::NNUE::Networks>& networks;
+    const OptionsMap&                                        options;
+    ThreadPool&                                              threads;
+    TranspositionTable&                                      tt;
+    const LazyNumaReplicatedSystemWide<Eval::NNUE::Network>& network;
 
     // Used by NNUE
     Eval::NNUE::AccumulatorStack  accumulatorStack;

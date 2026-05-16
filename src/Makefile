@@ -1053,7 +1053,7 @@ endif
 	format analyze
 
 analyze: net config-sanity objclean
-	$(MAKE) -k ARCH=$(ARCH) COMP=$(COMP) $(notdir $(patsubst %.cpp,%.o,$(filter-out ./external/%,$(filter %.cpp,$(SRCS)))))
+	$(MAKE) -k ARCH=$(ARCH) COMP=$(COMP) $(notdir $(patsubst %.cpp,%.o,$(filter-out external/%,$(filter %.cpp,$(SRCS)))))
 
 ifeq ($(UNIVERSAL_BUILD),false)
 build: net config-sanity
@@ -1289,7 +1289,7 @@ UNIVERSAL_ENTRY_OBJ  := $(TEMP_DIR)/entry_x86.o
 NET_SENTINEL         := $(TEMP_DIR)/.net-done
 
 # Top-level tracked items in src/ (directories and files)
-TRACKED_TOP := $(shell echo "$(SRCS) $(HEADERS) Makefile" | xargs -n1 | awk -F/ '{print $$1}' | sort -u)
+TRACKED_TOP := $(sort $(foreach f,$(SRCS) $(HEADERS) Makefile,$(firstword $(subst /, ,$(f)))))
 
 # Baseline x86-64 must come first in the final link (Windows --allow-multiple-definition
 # uses the first copy of inline duplicates)

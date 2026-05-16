@@ -30,13 +30,15 @@
 
 #include "types.h"
 
+namespace Stockfish {
+
 #ifdef USE_PEXT
     #define IF_NOT_PEXT(...)
+using MagicMask = uint32_t;
 #else
     #define IF_NOT_PEXT(...) __VA_ARGS__
+using MagicMask = Bitboard;
 #endif
-
-namespace Stockfish {
 
 namespace Bitboards {
 
@@ -84,10 +86,14 @@ extern Bitboard LineBB[SQUARE_NB][SQUARE_NB];
 
 // Magic holds all magic bitboards relevant data for a single square
 struct Magic {
-    Bitboard  mask;
-    Bitboard* attacks;
-    unsigned  shift;
-    IF_NOT_PEXT(Bitboard magic;)
+    Bitboard   mask;
+    MagicMask* attacks;
+    unsigned   shift;
+#ifdef USE_PEXT
+    Bitboard pseudoAttacks;
+#else
+    Bitboard magic;
+#endif
 
     // Compute the attack's index using the 'magic bitboards' approach
     unsigned index(Bitboard occupied) const {
@@ -96,6 +102,14 @@ struct Magic {
         return unsigned(pext(occupied, mask, shift));
 #else
         return unsigned(((occupied & mask) * magic) >> shift);
+#endif
+    }
+
+    Bitboard attack_bb(Bitboard occupied) const {
+#ifdef USE_PEXT
+        return pdep(attacks[index(occupied)], pseudoAttacks);
+#else
+        return attacks[index(occupied)];
 #endif
     }
 };
@@ -288,6 +302,16 @@ inline int popcount(Bitboard b) {
 #endif
 }
 
+static constexpr int lsb_index64[64] = {
+  0,  47, 1,  56, 48, 27, 2,  60, 57, 49, 41, 37, 28, 16, 3,  61, 54, 58, 35, 52, 50, 42,
+  21, 44, 38, 32, 29, 23, 17, 11, 4,  62, 46, 55, 26, 59, 40, 36, 15, 53, 34, 51, 20, 43,
+  31, 22, 10, 45, 25, 39, 14, 33, 19, 30, 9,  24, 13, 18, 8,  12, 7,  6,  5,  63};
+
+constexpr int constexpr_lsb(uint64_t bb) {
+    assert(bb != 0);
+    constexpr uint64_t debruijn64 = 0x03F79D71B4CB0A89ULL;
+    return lsb_index64[((bb ^ (bb - 1)) * debruijn64) >> 58];
+}
 
 // Return the least significant bit in a non-zero bitboard
 inline Square lsb(Bitboard b) {
@@ -512,15 +536,15 @@ inline Bitboard attacks_bb(Square s, Bitboard occupied) {
     switch (Pt)
     {
     case ROOK :
-        return RookMagics[s].attacks[RookMagics[s].index(occupied)];
+        return RookMagics[s].attack_bb(occupied);
     case CANNON :
-        return CannonMagics[s].attacks[CannonMagics[s].index(occupied)];
+        return CannonMagics[s].attack_bb(occupied);
     case BISHOP :
-        return BishopMagics[s].attacks[BishopMagics[s].index(occupied)];
+        return BishopMagics[s].attack_bb(occupied);
     case KNIGHT :
-        return KnightMagics[s].attacks[KnightMagics[s].index(occupied)];
+        return KnightMagics[s].attack_bb(occupied);
     case KNIGHT_TO :
-        return KnightToMagics[s].attacks[KnightToMagics[s].index(occupied)];
+        return KnightToMagics[s].attack_bb(occupied);
     default :
         return PseudoAttacks[Pt][s];
     }

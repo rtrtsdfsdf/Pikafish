@@ -217,20 +217,20 @@ void ThreadPool::set(const NumaConfig&                           numaConfig,
             const NumaIndex numaId        = doBindThreads ? boundThreadToNumaNode[threadId] : 0;
             auto            create_thread = [&]() {
                 auto manager = threadId == 0
-                                          ? std::unique_ptr<Search::ISearchManager>(
+                               ? std::unique_ptr<Search::ISearchManager>(
                                    std::make_unique<Search::SearchManager>(updateContext))
-                                          : std::make_unique<Search::NullSearchManager>();
+                               : std::make_unique<Search::NullSearchManager>();
 
                 // When not binding threads we want to force all access to happen
                 // from the same NUMA node, because in case of NUMA replicated memory
                 // accesses we don't want to trash cache in case the threads get scheduled
                 // on the same NUMA node.
                 auto binder = doBindThreads ? OptionalThreadToNumaNodeBinder(numaConfig, numaId)
-                                                       : OptionalThreadToNumaNodeBinder(numaId);
+                                            : OptionalThreadToNumaNodeBinder(numaId);
 
                 threads.emplace_back(std::make_unique<Thread>(sharedState, std::move(manager),
-                                                                         threadId, counts[numaId]++,
-                                                                         threadsPerNode[numaId], binder));
+                                                              threadId, counts[numaId]++,
+                                                              threadsPerNode[numaId], binder));
             };
 
             // Ensure the worker thread inherits the intended NUMA affinity at creation.
@@ -324,8 +324,8 @@ void ThreadPool::start_thinking(Position& pos, StateListPtr& states, Search::Lim
             th->worker->limits = limits;
             th->worker->nodes = th->worker->bestMoveChanges = 0;
             th->worker->nmpMinPly                           = 0;
-            th->worker->rootDepth = th->worker->completedDepth = 0;
-            th->worker->rootMoves                              = rootMoves;
+            th->worker->rootDepth                           = 0;
+            th->worker->rootMoves                           = rootMoves;
             th->worker->rootPos.set(pos, &th->worker->rootState);
             th->worker->rootState = setupStates->back();
         });
@@ -351,51 +351,46 @@ Thread* ThreadPool::get_best_thread() const {
 
     // Vote according to score and depth, and select the best thread
     auto thread_voting_value = [minScore](Thread* th) {
-        return (th->worker->rootMoves[0].score - minScore + 14) * int(th->worker->completedDepth);
+        return (th->worker->rootMoves[0].score - minScore + 14) * int(th->worker->rootDepth);
     };
 
     for (auto&& th : threads)
         votes[th->worker->rootMoves[0].pv[0]] += thread_voting_value(th.get());
 
-    auto has_bound = [](const Thread* th) {
-        return th->worker->rootMoves[0].scoreLowerbound || th->worker->rootMoves[0].scoreUpperbound;
-    };
-
     for (auto&& th : threads)
     {
-        const auto bestThreadScore = bestThread->worker->rootMoves[0].score;
-        const auto newThreadScore  = th->worker->rootMoves[0].score;
+        const auto& bestThreadMove = bestThread->worker->rootMoves[0];
+        const auto& newThreadMove  = th->worker->rootMoves[0];
 
-        const auto& bestThreadPV = bestThread->worker->rootMoves[0].pv;
-        const auto& newThreadPV  = th->worker->rootMoves[0].pv;
-
-        const auto bestThreadMoveVote = votes[bestThreadPV[0]];
-        const auto newThreadMoveVote  = votes[newThreadPV[0]];
+        const auto bestThreadMoveVote = votes[bestThreadMove.pv[0]];
+        const auto newThreadMoveVote  = votes[newThreadMove.pv[0]];
 
         // Aborted (d1) searches may lead to inexact win (or loss) scores.
-        const bool bestThreadDecisive = bestThreadScore != -VALUE_INFINITE
-                                     && is_decisive(bestThreadScore) && !has_bound(bestThread);
-        const bool newThreadDecisive =
-          newThreadScore != -VALUE_INFINITE && is_decisive(newThreadScore) && !has_bound(th.get());
+        const bool bestThreadDecisive = bestThreadMove.score != -VALUE_INFINITE
+                                     && is_decisive(bestThreadMove.score)
+                                     && !bestThreadMove.score_is_bound();
+        const bool newThreadDecisive = newThreadMove.score != -VALUE_INFINITE
+                                    && is_decisive(newThreadMove.score)
+                                    && !newThreadMove.score_is_bound();
 
         // We make sure not to pick a thread with a truncated principal variation.
         const bool betterVotingValue =
-          thread_voting_value(th.get()) * int(newThreadPV.size() > 2)
-          > thread_voting_value(bestThread) * int(bestThreadPV.size() > 2);
+          thread_voting_value(th.get()) * int(newThreadMove.pv.size() > 2)
+          > thread_voting_value(bestThread) * int(bestThreadMove.pv.size() > 2);
 
         if (bestThreadDecisive)
         {
             // Make sure we pick the shortest mate / TB conversion.
-            if (newThreadDecisive && std::abs(newThreadScore) > std::abs(bestThreadScore))
+            if (newThreadDecisive && std::abs(newThreadMove.score) > std::abs(bestThreadMove.score))
             {
-                assert((is_win(bestThreadScore) && is_win(newThreadScore))
-                       || (is_loss(bestThreadScore) && is_loss(newThreadScore)));
+                assert((is_win(bestThreadMove.score) && is_win(newThreadMove.score))
+                       || (is_loss(bestThreadMove.score) && is_loss(newThreadMove.score)));
 
                 bestThread = th.get();
             }
         }
         else if (newThreadDecisive
-                 || (!is_loss(newThreadScore)
+                 || (!is_loss(newThreadMove.score)
                      && (newThreadMoveVote > bestThreadMoveVote
                          || (newThreadMoveVote == bestThreadMoveVote && betterVotingValue))))
             bestThread = th.get();
